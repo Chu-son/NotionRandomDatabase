@@ -1,0 +1,24 @@
+version: "3.4"
+
+services:
+  clasp_dev:
+    image: notion_random_database
+    build:
+      context: .
+      dockerfile: "docker/Dockerfile"
+
+    tty: true
+    network_mode: "host"
+    privileged: true
+    environment:
+      - DISPLAY=${DISPLAY}
+
+    env_file:
+      - .env
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - $HOME/.Xauthority/:/root/.Xauthority
+      - ./:/app/
+      - /dev:/dev
+
+    command: "sleep infinity"
