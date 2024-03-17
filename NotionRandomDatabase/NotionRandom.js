@@ -24,8 +24,8 @@ function callNotionAPI(endpoint, method, payload) {
   return JSON.parse(response.getContentText());
 }
 
-function getDatabaseData(database_id) {
-  return callNotionAPI(`databases/${database_id}/query`, "post", {});
+function getDatabaseData(database_id, payload = {}) {
+  return callNotionAPI(`databases/${database_id}/query`, "post", payload);
 }
 
 function updateCheckboxStatus(pageId, status, col_name) {
@@ -74,6 +74,12 @@ function randomCheckToDatabase(database_id, col_name, num) {
 function readSpreadsheetData() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("List");
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
+
+  return data;
+}
+
+function randomCheckToAllDatabase() {
+  const data = readSpreadsheetData();
   for (let row of data) {
     const [no, enable, database_name, database_id, col_name, num] = row;
     if (enable) {
@@ -83,5 +89,74 @@ function readSpreadsheetData() {
 }
 
 function onTimeTrigger() {
-  readSpreadsheetData();
+  randomCheckToAllDatabase();
+}
+
+function onTimeTrigger_RandomCheckToAllDatabase() {
+  randomCheckToAllDatabase();
+}
+
+function findTitlePropertyName(responseContent) {
+  for (let page of responseContent.results) {
+    for (let propertyName in page.properties) {
+      if (page.properties[propertyName].id === "title") {
+        return propertyName;
+      }
+    }
+  }
+  return null;
+}
+
+function recordDatabasePagesToSpreadsheet(database_id, database_name) {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = spreadsheet.getSheetByName(`${database_name}_data`);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(`${database_name}_data`);
+  }
+  // clear sheet
+  sheet.clear();
+  let data = [["Title", "PageId"]]; // Add header row
+
+  let next_cursor = undefined;
+  let titlePropertyName = undefined;
+  while (true) {
+    console.log(next_cursor);
+    const payload = {
+      start_cursor: next_cursor,
+    };
+    const responseContent = getDatabaseData(database_id, payload);
+    if (!titlePropertyName) {
+      titlePropertyName = findTitlePropertyName(responseContent);
+
+      if (!titlePropertyName) {
+        throw new Error("Title property not found");
+      }
+    }
+
+    for (let page of responseContent.results) {
+      let title = "No Title";
+      if (page.properties[titlePropertyName].title.length > 0) {
+        title = page.properties[titlePropertyName].title[0].plain_text;
+      }
+      const pageId = page.id;
+      data.push([title, pageId]);
+    }
+
+    if (responseContent.has_more) {
+      next_cursor = responseContent.next_cursor;
+    } else {
+      break;
+    }
+  }
+  sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+}
+
+function recordAllDatabasePagesToSpreadsheet() {
+  const data = readSpreadsheetData();
+  for (let row of data) {
+    const [no, enable, database_name, database_id, col_name, num] = row;
+    if (enable) {
+      recordDatabasePagesToSpreadsheet(database_id, database_name);
+    }
+  }
 }
