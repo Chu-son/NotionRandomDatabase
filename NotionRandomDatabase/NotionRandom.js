@@ -9,7 +9,7 @@ const headers = {
   "Notion-Version": "2022-06-28",
 };
 
-function callNotionAPI(endpoint, method, payload) {
+function callNotionApi(endpoint, method, payload) {
   const requestUrl = `https://api.notion.com/v1/${endpoint}`;
   const options = {
     method: method,
@@ -24,11 +24,11 @@ function callNotionAPI(endpoint, method, payload) {
   return JSON.parse(response.getContentText());
 }
 
-function getDatabaseData(database_id, payload = {}) {
-  return callNotionAPI(`databases/${database_id}/query`, "post", payload);
+function fetchDatabaseData(database_id, payload = {}) {
+  return callNotionApi(`databases/${database_id}/query`, "post", payload);
 }
 
-function updateCheckboxStatus(pageId, status, col_name) {
+function updatePageCheckboxStatus(pageId, status, col_name) {
   const payload = {
     properties: {
       [col_name]: {
@@ -36,10 +36,10 @@ function updateCheckboxStatus(pageId, status, col_name) {
       },
     },
   };
-  callNotionAPI(`pages/${pageId}`, "patch", payload);
+  callNotionApi(`pages/${pageId}`, "patch", payload);
 }
 
-function getRandomIndexes(dataLength, count) {
+function generateRandomIndexes(dataLength, count) {
   var randomIndexes = new Set();
   while (randomIndexes.size < count) {
     randomIndexes.add(Math.floor(Math.random() * dataLength));
@@ -47,7 +47,7 @@ function getRandomIndexes(dataLength, count) {
   return randomIndexes;
 }
 
-function selectRandomData(results, indexes) {
+function selectRandomPages(results, indexes) {
   var selectedData = [];
   for (let index of indexes) {
     selectedData.push(results[index]);
@@ -55,48 +55,48 @@ function selectRandomData(results, indexes) {
   return selectedData;
 }
 
-function randomCheckToDatabase(database_id, col_name, num) {
-  const responseContent = getDatabaseData(database_id);
+function updateRandomPageCheckboxesInDatabase(database_id, col_name, num) {
+  const responseContent = fetchDatabaseData(database_id);
   for (let data of responseContent.results) {
     if (data.properties[col_name].checkbox) {
-      updateCheckboxStatus(data.id, false, col_name);
+      updatePageCheckboxStatus(data.id, false, col_name);
     }
   }
   let dataLength = responseContent.results.length;
   const pickupDataCount = Math.min(num, dataLength);
-  const randomIndexes = getRandomIndexes(dataLength, pickupDataCount);
-  const selectedData = selectRandomData(responseContent.results, randomIndexes);
+  const randomIndexes = generateRandomIndexes(dataLength, pickupDataCount);
+  const selectedData = selectRandomPages(responseContent.results, randomIndexes);
   for (let data of selectedData) {
-    updateCheckboxStatus(data.id, true, col_name);
+    updatePageCheckboxStatus(data.id, true, col_name);
   }
 }
 
-function readSpreadsheetData() {
+function fetchSpreadsheetData() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("List");
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
 
   return data;
 }
 
-function randomCheckToAllDatabase() {
-  const data = readSpreadsheetData();
+function updateRandomPageCheckboxesInAllDatabases() {
+  const data = fetchSpreadsheetData();
   for (let row of data) {
     const [no, enable, database_name, database_id, col_name, num] = row;
     if (enable) {
-      randomCheckToDatabase(database_id, col_name, num);
+      updateRandomPageCheckboxesInDatabase(database_id, col_name, num);
     }
   }
 }
 
-function onTimeTrigger() {
-  randomCheckToAllDatabase();
+function timedTrigger() {
+  updateRandomPageCheckboxesInAllDatabases();
 }
 
-function onTimeTrigger_RandomCheckToAllDatabase() {
-  randomCheckToAllDatabase();
+function timedTriggerForAllDatabases() {
+  updateRandomPageCheckboxesInAllDatabases();
 }
 
-function findTitlePropertyName(responseContent) {
+function findPropertyNameForTitle(responseContent) {
   for (let page of responseContent.results) {
     for (let propertyName in page.properties) {
       if (page.properties[propertyName].id === "title") {
@@ -107,7 +107,7 @@ function findTitlePropertyName(responseContent) {
   return null;
 }
 
-function recordDatabasePagesToSpreadsheet(database_id, database_name) {
+function writeDatabasePagesToSpreadsheet(database_id, database_name) {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = spreadsheet.getSheetByName(`${database_name}_data`);
   if (!sheet) {
@@ -124,9 +124,9 @@ function recordDatabasePagesToSpreadsheet(database_id, database_name) {
     const payload = {
       start_cursor: next_cursor,
     };
-    const responseContent = getDatabaseData(database_id, payload);
+    const responseContent = fetchDatabaseData(database_id, payload);
     if (!titlePropertyName) {
-      titlePropertyName = findTitlePropertyName(responseContent);
+      titlePropertyName = findPropertyNameForTitle(responseContent);
 
       if (!titlePropertyName) {
         throw new Error("Title property not found");
@@ -151,12 +151,12 @@ function recordDatabasePagesToSpreadsheet(database_id, database_name) {
   sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
 }
 
-function recordAllDatabasePagesToSpreadsheet() {
-  const data = readSpreadsheetData();
+function writeAllDatabasePagesToSpreadsheet() {
+  const data = fetchSpreadsheetData();
   for (let row of data) {
     const [no, enable, database_name, database_id, col_name, num] = row;
     if (enable) {
-      recordDatabasePagesToSpreadsheet(database_id, database_name);
+      writeDatabasePagesToSpreadsheet(database_id, database_name);
     }
   }
 }
