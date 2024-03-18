@@ -47,53 +47,11 @@ function generateRandomIndexes(dataLength, count) {
   return randomIndexes;
 }
 
-function selectRandomPages(results, indexes) {
-  var selectedData = [];
-  for (let index of indexes) {
-    selectedData.push(results[index]);
-  }
-  return selectedData;
-}
-
-function updateRandomPageCheckboxesInDatabase(database_id, col_name, num) {
-  const responseContent = fetchDatabaseData(database_id);
-  for (let data of responseContent.results) {
-    if (data.properties[col_name].checkbox) {
-      updatePageCheckboxStatus(data.id, false, col_name);
-    }
-  }
-  let dataLength = responseContent.results.length;
-  const pickupDataCount = Math.min(num, dataLength);
-  const randomIndexes = generateRandomIndexes(dataLength, pickupDataCount);
-  const selectedData = selectRandomPages(responseContent.results, randomIndexes);
-  for (let data of selectedData) {
-    updatePageCheckboxStatus(data.id, true, col_name);
-  }
-}
-
 function fetchSpreadsheetData() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("List");
   const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 6).getValues();
 
   return data;
-}
-
-function updateRandomPageCheckboxesInAllDatabases() {
-  const data = fetchSpreadsheetData();
-  for (let row of data) {
-    const [no, enable, database_name, database_id, col_name, num] = row;
-    if (enable) {
-      updateRandomPageCheckboxesInDatabase(database_id, col_name, num);
-    }
-  }
-}
-
-function timedTrigger() {
-  updateRandomPageCheckboxesInAllDatabases();
-}
-
-function timedTriggerForAllDatabases() {
-  updateRandomPageCheckboxesInAllDatabases();
 }
 
 function findPropertyNameForTitle(responseContent) {
@@ -107,12 +65,23 @@ function findPropertyNameForTitle(responseContent) {
   return null;
 }
 
-function writeDatabasePagesToSpreadsheet(database_id, database_name) {
+function generateSheetName(database_name) {
+  return `${database_name}_data`;
+}
+
+function getSheetByName(sheetName, create = false) {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = spreadsheet.getSheetByName(`${database_name}_data`);
-  if (!sheet) {
-    sheet = spreadsheet.insertSheet(`${database_name}_data`);
+  let sheet = spreadsheet.getSheetByName(sheetName);
+  if (!sheet && create) {
+    sheet = spreadsheet.insertSheet(sheetName);
   }
+  return sheet;
+}
+
+function writeDatabasePagesToSpreadsheet(database_id, database_name) {
+  const sheetName = generateSheetName(database_name);
+  const sheet = getSheetByName(sheetName, true);
+
   // clear sheet
   sheet.clear();
   let data = [["Title", "PageId", "View"]];
@@ -158,6 +127,55 @@ function writeAllDatabasePagesToSpreadsheet() {
     const [no, enable, database_name, database_id, col_name, num] = row;
     if (enable) {
       writeDatabasePagesToSpreadsheet(database_id, database_name);
+    }
+  }
+}
+
+function resetViewCheckboxesInDatabases(sheet, col_name) {
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+  for (let i = 0; i < data.length; i++) {
+    const [title, pageId, view] = data[i];
+    if (view) {
+      updatePageCheckboxStatus(pageId, false, col_name);
+      // Update the View column in the spreadsheet
+      sheet.getRange(i + 2, 3).setValue(false);
+    }
+  }
+}
+
+function selectRandomPagesInDatabases(sheet, col_name, num) {
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+  const dataLength = data.length;
+  const pickupDataCount = Math.min(num, dataLength);
+  const randomIndexes = generateRandomIndexes(dataLength, pickupDataCount);
+
+  // Set View to true for randomly selected rows
+  for (let index of randomIndexes) {
+    sheet.getRange(index + 2, 3).setValue(true);
+  }
+}
+
+function updateViewCheckboxesInDatabases(sheet, col_name) {
+  const data = sheet.getRange(2, 1, sheet.getLastRow() - 1, 3).getValues();
+  for (let row of data) {
+    const [title, pageId, view] = row;
+    if (view) {
+      updatePageCheckboxStatus(pageId, true, col_name);
+    }
+  }
+}
+
+function updateRandomPageCheckboxesInAllDatabases() {
+  const data = fetchSpreadsheetData();
+  for (let row of data) {
+    const [no, enable, database_name, database_id, col_name, num] = row;
+    if (enable) {
+      const sheetName = generateSheetName(database_name);
+      const sheet = getSheetByName(sheetName);
+
+      resetViewCheckboxesInDatabases(sheet, col_name);
+      selectRandomPagesInDatabases(sheet, col_name, num);
+      updateViewCheckboxesInDatabases(sheet, col_name);
     }
   }
 }
