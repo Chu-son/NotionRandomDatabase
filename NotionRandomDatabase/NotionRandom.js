@@ -115,7 +115,7 @@ function writeDatabasePagesToSpreadsheet(database_id, database_name) {
   }
   // clear sheet
   sheet.clear();
-  let data = [["Title", "PageId"]]; // Add header row
+  let data = [["Title", "PageId", "View"]];
 
   let next_cursor = undefined;
   let titlePropertyName = undefined;
@@ -139,7 +139,8 @@ function writeDatabasePagesToSpreadsheet(database_id, database_name) {
         title = page.properties[titlePropertyName].title[0].plain_text;
       }
       const pageId = page.id;
-      data.push([title, pageId]);
+      const view = page.properties["View"].checkbox;
+      data.push([title, pageId, view]);
     }
 
     if (responseContent.has_more) {
